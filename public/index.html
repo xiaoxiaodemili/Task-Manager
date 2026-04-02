@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskManage - 敏捷项目管理</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Login View -->
+    <div id="login-view" class="view active">
+        <div class="glass-card login-box">
+            <div class="brand-logo">TM</div>
+            <h1>欢迎回来</h1>
+            <p>登录到任务管理系统</p>
+            <form id="login-form">
+                <div class="input-group">
+                    <label>用户名</label>
+                    <input type="text" id="username" autocomplete="off" required>
+                </div>
+                <div class="input-group">
+                    <label>密码</label>
+                    <input type="password" id="password" required>
+                </div>
+                <button type="submit" class="btn primary full-width">🚀 登 录</button>
+            </form>
+            <div id="login-error" class="error-msg"></div>
+        </div>
+    </div>
+
+    <!-- App View -->
+    <div id="app-view" class="view">
+        <nav class="sidebar glass-panel">
+            <div class="brand">
+                <div class="brand-logo small">TM</div>
+                <h2>TaskManage</h2>
+            </div>
+            <ul class="nav-menu">
+                <li data-target="dashboard" class="nav-item active">📁 项目看板</li>
+                <li data-target="kanban" class="nav-item">📋 任务视图</li>
+                <li data-target="members" class="nav-item pm-only">👥 成员管理</li>
+            </ul>
+            <div class="user-info">
+                <div class="avatar">👨‍💻</div>
+                <div class="details">
+                    <span id="current-username">User</span>
+                    <span id="current-role" class="badge">ROLE</span>
+                </div>
+                <button id="logout-btn" class="btn icon-btn" title="退出登录">🚪</button>
+            </div>
+        </nav>
+        
+        <main class="content">
+            <!-- Dashboard -->
+            <section id="dashboard" class="page active">
+                <div class="page-header">
+                    <div>
+                        <h1>项目列表</h1>
+                        <p class="subtitle">管理您的所有项目与进度</p>
+                    </div>
+                    <button class="btn primary pm-only" id="create-project-btn">+ 新建项目</button>
+                </div>
+                <div class="grid" id="projects-grid">
+                    <!-- Cards injected via JS -->
+                </div>
+            </section>
+
+            <!-- Kanban -->
+            <section id="kanban" class="page">
+                <div class="page-header kanban-header">
+                    <div>
+                        <h1>任务看板</h1>
+                        <div class="select-wrapper">
+                            <select id="project-selector" class="glass-select">
+                                <option value="">正在加载项目...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button class="btn primary" id="create-task-btn">+ 新建任务</button>
+                </div>
+                <div class="board" id="kanban-board">
+                    <div class="column glass-panel" data-status="TODO">
+                        <div class="col-header">
+                            <h3>待完成 <span class="count todo-count">0</span></h3>
+                            <div class="status-indicator stat-todo"></div>
+                        </div>
+                        <div class="task-list" id="col-TODO"></div>
+                    </div>
+                    <div class="column glass-panel" data-status="IN_PROGRESS">
+                        <div class="col-header">
+                            <h3>进行中 <span class="count inprog-count">0</span></h3>
+                            <div class="status-indicator stat-inprog"></div>
+                        </div>
+                        <div class="task-list" id="col-IN_PROGRESS"></div>
+                    </div>
+                    <div class="column glass-panel" data-status="DONE">
+                        <div class="col-header">
+                            <h3>已完成 <span class="count done-count">0</span></h3>
+                            <div class="status-indicator stat-done"></div>
+                        </div>
+                        <div class="task-list" id="col-DONE"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Members -->
+            <section id="members" class="page pm-only">
+                <div class="page-header">
+                    <div>
+                        <h1>成员管理</h1>
+                        <p class="subtitle">管理团队访问权限与角色</p>
+                    </div>
+                    <button class="btn primary" id="create-user-btn">+ 新建成员</button>
+                </div>
+                <div class="table-container glass-panel">
+                    <table id="users-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>用户名</th>
+                                <th>角色权限</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals (Hidden) -->
+    <div id="modal-overlay" class="modal-overlay">
+        <!-- Forms dynamically injected -->
+    </div>
+    
+    <script src="app.js"></script>
+</body>
+</html>

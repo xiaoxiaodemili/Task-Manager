@@ -1,0 +1,4 @@
+node_modules/
+.env
+TaskManage_Release/
+TaskManage_Release.zip
