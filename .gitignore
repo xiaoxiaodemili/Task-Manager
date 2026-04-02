@@ -2,3 +2,6 @@ node_modules/
 .env
 TaskManage_Release/
 TaskManage_Release.zip
+request.md
+业务与实现总结.md
+用户使用手册.md
