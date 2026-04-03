@@ -115,19 +115,29 @@ app.get('/api/projects', authenticateToken, (req, res) => {
             res.json(rows);
         });
     } else if (req.user.role === 'PM') {
-        db.all(`${baseSql} WHERE created_by = ?`, [req.user.id], (err, rows) => {
+        // PM 看到自己创建的项目，以及被添加为成员的项目
+        const sql = `
+            SELECT DISTINCT projects.*, u.username as owner_name 
+            FROM projects 
+            LEFT JOIN users u ON projects.created_by = u.id
+            LEFT JOIN project_members pm ON projects.id = pm.project_id
+            WHERE projects.created_by = ? OR pm.user_id = ?
+        `;
+        db.all(sql, [req.user.id, req.user.id], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows);
         });
     } else {
+        // 普通成员看到分配了任务的项目，或者被显式添加为成员的项目
         const sql = `
             SELECT DISTINCT projects.*, u.username as owner_name 
             FROM projects 
-            INNER JOIN tasks ON projects.id = tasks.project_id 
+            LEFT JOIN tasks ON projects.id = tasks.project_id 
             LEFT JOIN users u ON projects.created_by = u.id
-            WHERE tasks.assignee_id = ?
+            LEFT JOIN project_members pm ON projects.id = pm.project_id
+            WHERE tasks.assignee_id = ? OR pm.user_id = ?
         `;
-        db.all(sql, [req.user.id], (err, rows) => {
+        db.all(sql, [req.user.id, req.user.id], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows);
         });
@@ -135,21 +145,44 @@ app.get('/api/projects', authenticateToken, (req, res) => {
 });
 
 app.post('/api/projects', authenticateToken, requirePM, (req, res) => {
-    const { name, description, owner_id } = req.body;
+    const { name, description, owner_id, due_date, member_ids } = req.body;
     let targetOwnerId = req.user.id;
     if (req.user.username === 'admin' && owner_id) {
         targetOwnerId = owner_id;
     }
-    const sql = "INSERT INTO projects (name, description, created_by) VALUES (?, ?, ?)";
-    db.run(sql, [name, description, targetOwnerId], function (err) {
+    const sql = "INSERT INTO projects (name, description, created_by, due_date) VALUES (?, ?, ?, ?)";
+    db.run(sql, [name, description, targetOwnerId, due_date || null], function (err) {
         if (err) return res.status(400).json({ error: err.message });
-        res.json({ id: this.lastID, name, description, created_by: targetOwnerId });
+        const projectId = this.lastID;
+        
+        // Handle members
+        if (member_ids && Array.isArray(member_ids) && member_ids.length > 0) {
+            const placeholders = member_ids.map(() => "(?, ?)").join(",");
+            const values = [];
+            member_ids.forEach(uid => {
+                values.push(projectId, uid);
+            });
+            db.run(`INSERT INTO project_members (project_id, user_id) VALUES ${placeholders}`, values, (err) => {
+               if (err) console.error("Error inserting project members:", err);
+               res.json({ id: projectId, name, description, created_by: targetOwnerId, due_date });
+            });
+        } else {
+            res.json({ id: projectId, name, description, created_by: targetOwnerId, due_date });
+        }
+    });
+});
+ 
+app.get('/api/projects/:id/members', authenticateToken, (req, res) => {
+    const { id } = req.params;
+    db.all("SELECT user_id FROM project_members WHERE project_id = ?", [id], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows.map(r => r.user_id));
     });
 });
 
 app.put('/api/projects/:id', authenticateToken, requirePM, (req, res) => {
     const { id } = req.params;
-    const { name, description, owner_id } = req.body;
+    const { name, description, owner_id, due_date } = req.body;
     
     db.get("SELECT created_by FROM projects WHERE id = ?", [id], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
@@ -164,10 +197,24 @@ app.put('/api/projects/:id', authenticateToken, requirePM, (req, res) => {
             targetOwnerId = owner_id;
         }
         
-        const sql = "UPDATE projects SET name=?, description=?, created_by=? WHERE id=?";
-        db.run(sql, [name, description, targetOwnerId, id], function (err) {
+        const updateSql = "UPDATE projects SET name=?, description=?, created_by=?, due_date=? WHERE id=?";
+        db.run(updateSql, [name, description, targetOwnerId, due_date || null, id], function (err) {
             if (err) return res.status(400).json({ error: err.message });
-            res.json({ updated: this.changes });
+            
+            // Sync members
+            db.run("DELETE FROM project_members WHERE project_id = ?", [id], (err) => {
+                const member_ids = req.body.member_ids;
+                if (member_ids && Array.isArray(member_ids) && member_ids.length > 0) {
+                    const placeholders = member_ids.map(() => "(?, ?)").join(",");
+                    const values = [];
+                    member_ids.forEach(uid => values.push(id, uid));
+                    db.run(`INSERT INTO project_members (project_id, user_id) VALUES ${placeholders}`, values, (err) => {
+                        res.json({ updated: this.changes });
+                    });
+                } else {
+                    res.json({ updated: this.changes });
+                }
+            });
         });
     });
 });
@@ -223,16 +270,31 @@ app.put('/api/tasks/:id/status', authenticateToken, (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
     
-    db.get("SELECT assignee_id FROM tasks WHERE id = ?", [id], (err, row) => {
+    db.get("SELECT assignee_id, status FROM tasks WHERE id = ?", [id], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(404).json({ error: 'Task not found' });
         
-        if (req.user.role !== 'PM' && req.user.id !== row.assignee_id) {
+        if (row.status === 'DONE' && status !== 'DONE' && req.user.role !== 'PM' && req.user.username !== 'admin') {
+            return res.status(403).json({ error: '权限不足：只有项目经理及以上权限可将任务从“已完成”移出' });
+        }
+        
+        if (req.user.role !== 'PM' && req.user.username !== 'admin' && req.user.id !== row.assignee_id) {
             return res.status(403).json({ error: '权限不足：您只能更新分配给自己的任务进度' });
         }
         
-        const sql = "UPDATE tasks SET status = ? WHERE id = ?";
-        db.run(sql, [status, id], function (err) {
+        let sql, params;
+        if (status === 'DONE' && row.status !== 'DONE') {
+            sql = "UPDATE tasks SET status = ?, completed_at = DATETIME('now', 'localtime') WHERE id = ?";
+            params = [status, id];
+        } else if (row.status === 'DONE' && status !== 'DONE') {
+            sql = "UPDATE tasks SET status = ?, completed_at = NULL WHERE id = ?";
+            params = [status, id];
+        } else {
+            sql = "UPDATE tasks SET status = ? WHERE id = ?";
+            params = [status, id];
+        }
+        
+        db.run(sql, params, function (err) {
             if (err) return res.status(500).json({ error: err.message });
             res.json({ updated: this.changes });
         });
@@ -254,6 +316,44 @@ app.delete('/api/tasks/:id', authenticateToken, requirePM, (req, res) => {
     db.run("DELETE FROM tasks WHERE id = ?", id, function (err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ deleted: this.changes });
+    });
+});
+
+// --- REPORTS API ---
+app.get('/api/reports/projects', authenticateToken, (req, res) => {
+    if (req.user.role !== 'PM' && req.user.username !== 'admin') {
+        return res.status(403).json({ error: 'Requires admin or PM role to access reports' });
+    }
+
+    let sql = `
+        SELECT 
+            p.id as project_id, 
+            p.name as project_name, 
+            p.description as project_description, 
+            p.due_date as project_due_date,
+            u_owner.username as project_owner_name,
+            t.id as task_id,
+            t.title as task_title,
+            t.description as task_description,
+            t.status as task_status,
+            t.due_date as task_due_date,
+            t.completed_at as task_completed_at,
+            u_assignee.username as task_assignee_name
+        FROM projects p
+        LEFT JOIN users u_owner ON p.created_by = u_owner.id
+        LEFT JOIN tasks t ON p.id = t.project_id
+        LEFT JOIN users u_assignee ON t.assignee_id = u_assignee.id
+    `;
+
+    let params = [];
+    if (req.user.username !== 'admin') {
+        sql += ` WHERE p.created_by = ?`;
+        params.push(req.user.id);
+    }
+
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
     });
 });
 

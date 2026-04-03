@@ -22,6 +22,7 @@ const initDb = () => {
             description TEXT,
             created_by INTEGER,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            due_date DATE,
             FOREIGN KEY (created_by) REFERENCES users (id)
         )`);
 
@@ -36,9 +37,31 @@ const initDb = () => {
             due_date DATE,
             priority TEXT DEFAULT 'NORMAL',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            completed_at DATETIME,
             FOREIGN KEY (project_id) REFERENCES projects (id),
             FOREIGN KEY (assignee_id) REFERENCES users (id)
         )`);
+        
+        // Create project_members table (Relationship)
+        db.run(`CREATE TABLE IF NOT EXISTS project_members (
+            project_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            PRIMARY KEY (project_id, user_id),
+            FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        )`);
+
+        // 自动添加缺失的字段以进行向后兼容
+        db.all("PRAGMA table_info(projects);", (err, rows) => {
+            if (!err && rows && !rows.some(row => row.name === 'due_date')) {
+                db.run("ALTER TABLE projects ADD COLUMN due_date DATE");
+            }
+        });
+        db.all("PRAGMA table_info(tasks);", (err, rows) => {
+            if (!err && rows && !rows.some(row => row.name === 'completed_at')) {
+                db.run("ALTER TABLE tasks ADD COLUMN completed_at DATETIME");
+            }
+        });
 
         // Initialize admin user if none exists
         db.get("SELECT * FROM users WHERE username = 'admin'", (err, row) => {

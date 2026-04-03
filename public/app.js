@@ -17,7 +17,8 @@ const views = {
 const pages = {
     dashboard: document.getElementById('dashboard'),
     kanban: document.getElementById('kanban'),
-    members: document.getElementById('members')
+    members: document.getElementById('members'),
+    reports: document.getElementById('reports')
 };
 const els = {
     loginForm: document.getElementById('login-form'),
@@ -69,6 +70,7 @@ function setupEventListeners() {
             if (target === 'dashboard') loadProjects();
             if (target === 'kanban') loadKanban();
             if (target === 'members') loadUsers();
+            if (target === 'reports') initReportView();
         });
     });
 
@@ -189,9 +191,10 @@ function renderProjects() {
                 </div>
             </div>
             <p class="desc">${p.description || '无描述'}</p>
-            <div class="project-meta">
+            <div class="project-meta" style="flex-wrap: wrap;">
                 <span>👤 负责人: ${p.owner_name || '未知'}</span>
                 <span>📅 ${new Date(p.created_at).toLocaleDateString()}</span>
+                ${p.due_date ? `<span style="color:var(--danger-color)">🎯 截止: ${p.due_date}</span>` : ''}
             </div>
         </div>
     `).join('');
@@ -398,23 +401,50 @@ function renderProjectModal(project = null) {
             <label>描述</label>
             <textarea id="m-proj-desc" rows="3">${desc}</textarea>
         </div>
+        <div class="input-group">
+            <label>截止日期</label>
+            <input type="date" id="m-proj-duedate" value="${project ? (project.due_date || '') : ''}">
+        </div>
         ${ownerSelectHtml}
+        
+        <div class="input-group">
+            <label>项目成员</label>
+            <div id="m-proj-members-list" class="member-selector">
+                ${state.users.filter(u => u.username !== 'admin').map(u => `
+                    <div class="member-checkbox-item">
+                        <input type="checkbox" id="member-${u.id}" value="${u.id}">
+                        <label for="member-${u.id}">${u.username} (${u.role})</label>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+
         <div class="modal-actions">
             <button class="btn" onclick="closeModal()">取消</button>
             <button class="btn primary" onclick="submitProject(${project ? project.id : 'null'})">${isEdit ? '保存更改' : '创建'}</button>
         </div>
     `;
-    
-    if (state.user.username === 'admin' && !state.users.length) {
+
+    if (!state.users.length) {
         apiCall('/users').then(users => {
             state.users = users;
             renderProjectModal(project);
         });
         return;
     }
-    
+
     els.modalOverlay.innerHTML = `<div class="modal-content">${html}</div>`;
     els.modalOverlay.classList.add('active');
+
+    // If edit mode, fetch current members and check them
+    if (isEdit) {
+        apiCall(`/projects/${project.id}/members`).then(memberIds => {
+            memberIds.forEach(id => {
+                const cb = document.getElementById(`member-${id}`);
+                if (cb) cb.checked = true;
+            });
+        });
+    }
 }
 
 function showModal(type) {
@@ -513,19 +543,27 @@ function closeModal() {
 async function submitProject(id = null) {
     const name = document.getElementById('m-proj-name').value;
     const desc = document.getElementById('m-proj-desc').value;
+    const due_date = document.getElementById('m-proj-duedate').value;
     const ownerSelect = document.getElementById('m-proj-owner');
     const owner_id = ownerSelect ? parseInt(ownerSelect.value) : undefined;
     
+    // Collect picked member IDs
+    const memberIds = Array.from(document.querySelectorAll('#m-proj-members-list input[type="checkbox"]:checked'))
+                           .map(cb => parseInt(cb.value));
+
     if(!name) return alert('项目名必填');
     
+    const payload = { name, description: desc, owner_id, due_date: due_date || null, member_ids: memberIds };
+
     if (id) {
-        await apiCall(`/projects/${id}`, 'PUT', { name, description: desc, owner_id });
+        await apiCall(`/projects/${id}`, 'PUT', payload);
     } else {
-        await apiCall('/projects', 'POST', { name, description: desc, owner_id });
+        await apiCall('/projects', 'POST', payload);
     }
     
     closeModal();
     loadProjects();
+    if (pages.reports.classList.contains('active')) loadReportData();
 }
 
 async function submitTask() {
@@ -545,6 +583,7 @@ async function submitTask() {
     });
     closeModal();
     loadTasks(state.currentProject);
+    if (pages.reports.classList.contains('active')) loadReportData();
 }
 
 function editTask(btn) {
@@ -622,6 +661,7 @@ async function submitEditTask(id) {
     });
     closeModal();
     loadTasks(state.currentProject);
+    if (pages.reports.classList.contains('active')) loadReportData();
 }
 
 async function submitUser() {
@@ -684,6 +724,142 @@ async function deleteUser(id) {
     } catch(err) {
         // Already handled internally by apiCall's fetch throw
     }
+}
+
+// --- Reports ---
+let reportData = [];
+
+function initReportView() {
+    const reportTypeSelect = document.getElementById('report-type');
+    const reportYearGroup = document.getElementById('report-year-group');
+    const reportValueGroup = document.getElementById('report-value-group');
+    const reportYearInput = document.getElementById('report-year');
+    const reportValueInput = document.getElementById('report-value');
+
+    if (reportTypeSelect && !reportTypeSelect.dataset.initialized) {
+        reportTypeSelect.dataset.initialized = 'true';
+
+        const updateControlVisibility = () => {
+            const type = reportTypeSelect.value;
+            const valLabel = document.getElementById('report-value-label');
+
+            if (type === 'all') {
+                reportYearGroup.style.display = 'none';
+                reportValueGroup.style.display = 'none';
+            } else if (type === 'year') {
+                reportYearGroup.style.display = 'block';
+                reportValueGroup.style.display = 'none';
+            } else if (type === 'quarter') {
+                reportYearGroup.style.display = 'block';
+                reportValueGroup.style.display = 'block';
+                valLabel.textContent = '选择季度 (1-4)';
+                reportValueInput.max = 4;
+                if (reportValueInput.value > 4) reportValueInput.value = 1;
+            } else {
+                reportYearGroup.style.display = 'block';
+                reportValueGroup.style.display = 'block';
+                valLabel.textContent = '选择月份 (1-12)';
+                reportValueInput.max = 12;
+            }
+            renderReportTable();
+        };
+
+        reportTypeSelect.addEventListener('change', updateControlVisibility);
+        
+        // Use Search button instead of auto-refresh
+        document.getElementById('report-search-btn').addEventListener('click', renderReportTable);
+
+        // Initial fetch
+        loadReportData();
+    }
+}
+
+async function loadReportData() {
+    const body = document.getElementById('report-table-body');
+    body.innerHTML = '<tr><td colspan="10" style="text-align:center;">正在加载数据...</td></tr>';
+    try {
+        reportData = await apiCall('/reports/projects');
+        renderReportTable();
+    } catch (err) {
+        body.innerHTML = `<tr><td colspan="10" style="text-align:center; color:var(--danger-color)">加载失败: ${err.message}</td></tr>`;
+    }
+}
+
+function renderReportTable() {
+    const type = document.getElementById('report-type').value;
+    const year = parseInt(document.getElementById('report-year').value);
+    const value = parseInt(document.getElementById('report-value').value);
+    const body = document.getElementById('report-table-body');
+
+    let filtered = reportData;
+
+    if (type !== 'all') {
+        filtered = reportData.filter(row => {
+            if (!row.task_due_date) return false;
+            // task_due_date format is YYYY-MM-DD
+            const parts = row.task_due_date.split('-');
+            const rYear = parseInt(parts[0]);
+            const rMonth = parseInt(parts[1]);
+
+            if (rYear !== year) return false;
+
+            if (type === 'month') {
+                return rMonth === value;
+            } else if (type === 'quarter') {
+                const q = Math.ceil(rMonth / 3);
+                return q === value;
+            }
+            return true; // year match only
+        });
+    }
+
+    if (filtered.length === 0) {
+        body.innerHTML = '<tr><td colspan="10" style="text-align:center;">暂无匹配的数据记录</td></tr>';
+        return;
+    }
+
+    body.innerHTML = filtered.map(row => `
+        <tr>
+            <td>${row.project_name || '-'}</td>
+            <td title="${row.project_description || ''}">${(row.project_description || '').substring(0, 20)}${(row.project_description || '').length > 20 ? '...' : ''}</td>
+            <td>${row.project_owner_name || '-'}</td>
+            <td>${row.project_due_date || '-'}</td>
+            <td>${row.task_title || '无任务'}</td>
+            <td title="${row.task_description || ''}">${(row.task_description || '').substring(0, 20)}${(row.task_description || '').length > 20 ? '...' : ''}</td>
+            <td><span class="badge ${row.task_status === 'DONE' ? 'bg-success' : (row.task_status === 'IN_PROGRESS' ? 'bg-warn' : '')}">${row.task_status || '-'}</span></td>
+            <td>${row.task_assignee_name || '-'}</td>
+            <td>${row.task_due_date || '-'}</td>
+            <td>${row.task_completed_at || '-'}</td>
+        </tr>
+    `).join('');
+}
+
+function exportReportToCSV() {
+    const body = document.getElementById('report-table-body');
+    const rows = body.querySelectorAll('tr');
+    if (rows.length === 0 || (rows.length === 1 && rows[0].cells.length < 10)) {
+        return alert('没有可导出的数据');
+    }
+
+    let csvContent = '\uFEFF项目名称,项目描述,负责人,截止时间,任务名称,任务内容,完成状态,责任人,截止时间,完成时间\n';
+    
+    rows.forEach(tr => {
+        const rowData = Array.from(tr.cells).map(td => {
+            let text = td.title || td.textContent.trim();
+            return `"${text.replace(/"/g, '""')}"`;
+        });
+        csvContent += rowData.join(',') + '\n';
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const type = document.getElementById('report-type').value;
+    link.setAttribute('href', url);
+    link.setAttribute('download', `report_detailed_${type}_${new Date().getTime()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 // Start up
