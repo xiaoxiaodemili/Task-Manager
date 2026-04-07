@@ -257,8 +257,13 @@ app.post('/api/tasks', authenticateToken, (req, res) => {
     if (req.user.role === 'PM' || req.user.username === 'admin') {
         insertTask();
     } else {
-        const checkSql = "SELECT 1 FROM tasks WHERE project_id = ? AND assignee_id = ? LIMIT 1";
-        db.get(checkSql, [project_id, req.user.id], (err, row) => {
+        const checkSql = `
+            SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?
+            UNION
+            SELECT 1 FROM tasks WHERE project_id = ? AND assignee_id = ?
+            LIMIT 1
+        `;
+        db.get(checkSql, [project_id, req.user.id, project_id, req.user.id], (err, row) => {
             if (err) return res.status(500).json({ error: err.message });
             if (!row) return res.status(403).json({ error: '权限不足：您只能在参与的项目中添加任务' });
             insertTask();
