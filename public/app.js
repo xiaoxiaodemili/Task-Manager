@@ -79,11 +79,32 @@ function setupEventListeners() {
     els.createTaskBtn.addEventListener('click', () => showModal('task'));
     els.createUserBtn.addEventListener('click', () => showModal('user'));
 
-    // Kanban Project Selector
+    // Kanban Project Selector & Navigation
     els.projectSelector.addEventListener('change', (e) => {
         state.currentProject = e.target.value;
         if (state.currentProject) loadTasks(state.currentProject);
     });
+    
+    const navigateProject = (step) => {
+        const select = els.projectSelector;
+        if (!select || !select.options || select.options.length <= 1) return;
+        const currentIdx = select.selectedIndex;
+        let nextIdx = currentIdx + step;
+        
+        const firstValidIdx = select.options[0].value === "" ? 1 : 0;
+        
+        if (nextIdx < firstValidIdx) nextIdx = select.options.length - 1;
+        if (nextIdx >= select.options.length) nextIdx = firstValidIdx;
+        
+        select.selectedIndex = nextIdx;
+        state.currentProject = select.options[nextIdx].value;
+        if (state.currentProject) loadTasks(state.currentProject);
+    };
+
+    const prevBtn = document.getElementById('prev-project-btn');
+    const nextBtn = document.getElementById('next-project-btn');
+    if (prevBtn) prevBtn.addEventListener('click', () => navigateProject(-1));
+    if (nextBtn) nextBtn.addEventListener('click', () => navigateProject(1));
 
     // Drag and Drop
     Object.values(els.kanbanCols).forEach(col => {
@@ -220,6 +241,7 @@ function openProjectInKanban(id) {
 // --- Kanban ---
 function updateProjectSelector() {
     els.projectSelector.innerHTML = '<option value="">选择项目...</option>' + 
+        '<option value="all">全部</option>' +
         state.projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
     if (state.currentProject) els.projectSelector.value = state.currentProject;
 }
@@ -227,7 +249,7 @@ function updateProjectSelector() {
 async function loadKanban() {
     if (!state.projects.length) await loadProjects();
     if (!state.currentProject && state.projects.length > 0) {
-        state.currentProject = state.projects[0].id;
+        state.currentProject = 'all';
         els.projectSelector.value = state.currentProject;
     }
     if (state.currentProject) {
@@ -283,7 +305,10 @@ async function loadTasks(projectId) {
         card.innerHTML = `
             <div class="card-header">
                 <div>
-                    <span class="task-title" style="display:block; margin-bottom: 4px;">${t.title}</span>
+                    <span class="task-title" style="display:block; margin-bottom: 4px;">
+                        ${t.title}
+                        ${state.currentProject === 'all' && t.project_name ? `<span style="font-size: 0.85em; color: var(--text-secondary); font-weight: normal; margin-left: 6px;">[${t.project_name}]</span>` : ''}
+                    </span>
                     ${t.due_date ? `<div style="font-size:0.9rem; color: var(--text-secondary); font-weight: 500; margin-bottom: 8px;">🕒 截止时限: ${t.due_date} ${dueBadgeHtml}</div>` : ''}
                 </div>
                 <div class="card-actions" style="display:flex;">
@@ -408,7 +433,13 @@ function renderProjectModal(project = null) {
         ${ownerSelectHtml}
         
         <div class="input-group">
-            <label>项目成员</label>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                <label style="margin:0;">项目成员</label>
+                <div style="font-size:0.85em;">
+                    <input type="checkbox" id="m-proj-select-all" onchange="toggleAllMembers(this)" style="cursor:pointer; vertical-align:middle; margin-right:4px;">
+                    <label for="m-proj-select-all" style="display:inline; margin:0; cursor:pointer;">全选</label>
+                </div>
+            </div>
             <div id="m-proj-members-list" class="member-selector">
                 ${state.users.filter(u => u.username !== 'admin').map(u => `
                     <div class="member-checkbox-item">
@@ -454,7 +485,7 @@ function showModal(type) {
         renderProjectModal();
         return;
     } else if (type === 'task') {
-        if (!state.currentProject) return alert('请先选择一个项目');
+        if (!state.currentProject || state.currentProject === 'all') return alert('请先在下拉框选择一个具体的项目来新建任务');
         
         // Ensure users are loaded for assignee selector
         if (!state.users.length) {
@@ -540,6 +571,11 @@ function closeModal() {
     els.modalOverlay.classList.remove('active');
 }
 
+window.toggleAllMembers = function(cb) {
+    const cbs = document.querySelectorAll('#m-proj-members-list input[type="checkbox"]');
+    cbs.forEach(el => el.checked = cb.checked);
+};
+
 async function submitProject(id = null) {
     const name = document.getElementById('m-proj-name').value;
     const desc = document.getElementById('m-proj-desc').value;
@@ -598,6 +634,14 @@ function editTask(btn) {
     
     const html = `
         <h2>编辑任务</h2>
+        ${state.user.username === 'admin' ? `
+        <div class="input-group">
+            <label>所属项目 (仅超级管理员可修改)</label>
+            <select id="e-task-project" class="glass-select">
+                ${state.projects.map(p => `<option value="${p.id}" ${p.id == t.project_id ? 'selected' : ''}>${p.name}</option>`).join('')}
+            </select>
+        </div>
+        ` : `<input type="hidden" id="e-task-project" value="${t.project_id}">`}
         <div class="input-group">
             <label>任务标题</label>
             <input type="text" id="e-task-title" value="${safeTitle}" required>
@@ -647,18 +691,24 @@ function editTask(btn) {
 
 async function submitEditTask(id) {
     const title = document.getElementById('e-task-title').value;
+    const projEl = document.getElementById('e-task-project');
+    const project_id = projEl ? parseInt(projEl.value) : null;
     const desc = document.getElementById('e-task-desc').value;
     const assignee = document.getElementById('e-task-assignee').value;
     const priority = document.getElementById('e-task-priority').value;
     const dueDate = document.getElementById('e-task-duedate').value;
     
     if(!title) return alert('标题必填');
-    await apiCall(`/tasks/${id}`, 'PUT', {
+    const payload = {
         title, description: desc,
         assignee_id: assignee ? parseInt(assignee) : null,
         priority,
         due_date: dueDate || null
-    });
+    };
+    if (project_id) payload.project_id = project_id;
+    
+    await apiCall(`/tasks/${id}`, 'PUT', payload);
+    
     closeModal();
     loadTasks(state.currentProject);
     if (pages.reports.classList.contains('active')) loadReportData();

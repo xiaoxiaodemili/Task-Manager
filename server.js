@@ -231,16 +231,66 @@ app.delete('/api/projects/:id', authenticateToken, requirePM, (req, res) => {
 // --- TASKS API ---
 app.get('/api/projects/:projectId/tasks', authenticateToken, (req, res) => {
     const { projectId } = req.params;
-    const sql = `
-        SELECT tasks.*, users.username as assignee_name 
-        FROM tasks 
-        LEFT JOIN users ON tasks.assignee_id = users.id 
-        WHERE project_id = ?
-    `;
-    db.all(sql, [projectId], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+
+    if (projectId === 'all') {
+        const fetchTasksForAll = (projectIds) => {
+            if (projectIds.length === 0) return res.json([]);
+            const placeholders = projectIds.map(() => '?').join(',');
+            const sql = `
+                SELECT tasks.*, users.username as assignee_name, p.name as project_name 
+                FROM tasks 
+                LEFT JOIN users ON tasks.assignee_id = users.id 
+                LEFT JOIN projects p ON tasks.project_id = p.id
+                WHERE tasks.project_id IN (${placeholders})
+            `;
+            db.all(sql, projectIds, (err, rows) => {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json(rows);
+            });
+        };
+
+        if (req.user.username === 'admin') {
+            db.all("SELECT id FROM projects", (err, rows) => {
+                if (err) return res.status(500).json({ error: err.message });
+                fetchTasksForAll(rows.map(r => r.id));
+            });
+        } else if (req.user.role === 'PM') {
+            const sql = `
+                SELECT DISTINCT projects.id
+                FROM projects 
+                LEFT JOIN project_members pm ON projects.id = pm.project_id
+                WHERE projects.created_by = ? OR pm.user_id = ?
+            `;
+            db.all(sql, [req.user.id, req.user.id], (err, rows) => {
+                if (err) return res.status(500).json({ error: err.message });
+                fetchTasksForAll(rows.map(r => r.id));
+            });
+        } else {
+            const sql = `
+                SELECT DISTINCT projects.id
+                FROM projects 
+                LEFT JOIN tasks ON projects.id = tasks.project_id 
+                LEFT JOIN project_members pm ON projects.id = pm.project_id
+                WHERE tasks.assignee_id = ? OR pm.user_id = ?
+            `;
+            db.all(sql, [req.user.id, req.user.id], (err, rows) => {
+                if (err) return res.status(500).json({ error: err.message });
+                fetchTasksForAll(rows.map(r => r.id));
+            });
+        }
+    } else {
+        const sql = `
+            SELECT tasks.*, users.username as assignee_name, p.name as project_name 
+            FROM tasks 
+            LEFT JOIN users ON tasks.assignee_id = users.id 
+            LEFT JOIN projects p ON tasks.project_id = p.id
+            WHERE tasks.project_id = ?
+        `;
+        db.all(sql, [projectId], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
+        });
+    }
 });
 
 app.post('/api/tasks', authenticateToken, (req, res) => {
@@ -308,9 +358,18 @@ app.put('/api/tasks/:id/status', authenticateToken, (req, res) => {
 
 app.put('/api/tasks/:id', authenticateToken, requirePM, (req, res) => {
     const { id } = req.params;
-    const { title, description, assignee_id, due_date, priority } = req.body;
-    const sql = "UPDATE tasks SET title=?, description=?, assignee_id=?, due_date=?, priority=? WHERE id=?";
-    db.run(sql, [title, description, assignee_id, due_date, priority || 'NORMAL', id], function (err) {
+    const { project_id, title, description, assignee_id, due_date, priority } = req.body;
+    let sql, params;
+    
+    if (req.user.username === 'admin' && project_id) {
+        sql = "UPDATE tasks SET project_id=?, title=?, description=?, assignee_id=?, due_date=?, priority=? WHERE id=?";
+        params = [project_id, title, description, assignee_id, due_date, priority || 'NORMAL', id];
+    } else {
+        sql = "UPDATE tasks SET title=?, description=?, assignee_id=?, due_date=?, priority=? WHERE id=?";
+        params = [title, description, assignee_id, due_date, priority || 'NORMAL', id];
+    }
+    
+    db.run(sql, params, function (err) {
         if (err) return res.status(400).json({ error: err.message });
         res.json({ updated: this.changes });
     });

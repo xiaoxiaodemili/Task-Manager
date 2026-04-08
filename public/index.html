@@ -72,10 +72,12 @@
                 <div class="page-header kanban-header">
                     <div>
                         <h1>任务看板</h1>
-                        <div class="select-wrapper">
-                            <select id="project-selector" class="glass-select">
+                        <div class="select-wrapper" style="display:flex; align-items:center; gap:5px;">
+                            <button class="btn icon-btn" id="prev-project-btn" title="上一个项目" style="padding:0 5px;">◀</button>
+                            <select id="project-selector" class="glass-select" style="margin:0;">
                                 <option value="">正在加载项目...</option>
                             </select>
+                            <button class="btn icon-btn" id="next-project-btn" title="下一个项目" style="padding:0 5px;">▶</button>
                         </div>
                     </div>
                     <button class="btn primary" id="create-task-btn">+ 新建任务</button>
