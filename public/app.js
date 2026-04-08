@@ -6,7 +6,9 @@ let state = {
     user: JSON.parse(localStorage.getItem('user')) || null,
     projects: [],
     users: [],
-    currentProject: null
+    currentProject: null,
+    isScrolling: false,
+    scrollIntervals: []
 };
 
 // DOM Elements
@@ -19,7 +21,8 @@ const pages = {
     kanban: document.getElementById('kanban'),
     members: document.getElementById('members'),
     reports: document.getElementById('reports'),
-    feedbacks: document.getElementById('feedbacks')
+    feedbacks: document.getElementById('feedbacks'),
+    settingsPage: document.getElementById('settings-page')
 };
 const els = {
     loginForm: document.getElementById('login-form'),
@@ -43,7 +46,9 @@ const els = {
     createTaskBtn: document.getElementById('create-task-btn'),
     createUserBtn: document.getElementById('create-user-btn'),
     createFeedbackBtn: document.getElementById('create-feedback-btn'),
-    feedbacksTableBody: document.querySelector('#feedbacks-table tbody')
+    feedbacksTableBody: document.querySelector('#feedbacks-table tbody'),
+    settingsForm: document.getElementById('settings-form'),
+    setSoftwareName: document.getElementById('set-software-name')
 };
 
 // --- Initialization ---
@@ -75,8 +80,13 @@ function setupEventListeners() {
             if (target === 'members') loadUsers();
             if (target === 'reports') initReportView();
             if (target === 'feedbacks') loadFeedbacks();
+            if (target === 'settings-page') loadSettingsToForm();
         });
     });
+
+    if (els.settingsForm) {
+        els.settingsForm.addEventListener('submit', handleSettingsSubmit);
+    }
 
     // Modals
     els.createProjectBtn.addEventListener('click', () => showModal('project'));
@@ -110,6 +120,17 @@ function setupEventListeners() {
     const nextBtn = document.getElementById('next-project-btn');
     if (prevBtn) prevBtn.addEventListener('click', () => navigateProject(-1));
     if (nextBtn) nextBtn.addEventListener('click', () => navigateProject(1));
+
+    // Fullscreen and Scroll
+    const enterFsBtn = document.getElementById('enter-fullscreen-btn');
+    const exitFsBtn = document.getElementById('exit-fullscreen-btn');
+    const toggleScrollBtn = document.getElementById('toggle-scroll-btn');
+
+    if (enterFsBtn) enterFsBtn.addEventListener('click', toggleFullscreen);
+    if (exitFsBtn) exitFsBtn.addEventListener('click', toggleFullscreen);
+    if (toggleScrollBtn) toggleScrollBtn.addEventListener('click', toggleAutoScroll);
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
 
     // Drag and Drop
     Object.values(els.kanbanCols).forEach(col => {
@@ -165,6 +186,37 @@ function showApp() {
     els.currentRole.textContent = state.user.role;
     updateAccessControl();
     loadProjects();
+    loadSettings();
+}
+
+async function loadSettings() {
+    const settings = await apiCall('/settings');
+    if (settings.software_name) {
+        document.title = `${settings.software_name} - 敏捷项目管理`;
+        const logoText = document.querySelector('.brand h2');
+        if (logoText) logoText.textContent = settings.software_name;
+        const loginHeader = document.querySelector('.login-box p');
+        if (loginHeader) loginHeader.textContent = `登录到${settings.software_name}系统`;
+    }
+}
+
+async function loadSettingsToForm() {
+    const settings = await apiCall('/settings');
+    if (settings.software_name) {
+        els.setSoftwareName.value = settings.software_name;
+    }
+}
+
+async function handleSettingsSubmit(e) {
+    e.preventDefault();
+    const software_name = els.setSoftwareName.value;
+    try {
+        await apiCall('/settings', 'PUT', { software_name });
+        alert('系统设置已保存');
+        loadSettings();
+    } catch(err) {
+        console.error(err);
+    }
 }
 
 async function handleLogin(e) {
@@ -259,6 +311,81 @@ async function loadKanban() {
     }
     if (state.currentProject) {
         loadTasks(state.currentProject);
+    }
+}
+
+// --- Fullscreen & Scroll Logic ---
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+            alert(`无法进入全屏: ${err.message}`);
+        });
+    } else {
+        document.exitFullscreen();
+    }
+}
+
+function handleFullscreenChange() {
+    const isFs = !!document.fullscreenElement;
+    document.body.classList.toggle('fullscreen-active', isFs);
+    
+    // 全屏时隐藏/显示部分元素
+    const kanbanHeaderTitle = document.querySelector('#kanban .page-header h1');
+    if (isFs) {
+        apiCall('/settings').then(settings => {
+            kanbanHeaderTitle.textContent = `${settings.software_name || 'TaskManage'} - 任务看板`;
+        });
+    } else {
+        kanbanHeaderTitle.textContent = `任务看板`;
+    }
+}
+
+function toggleAutoScroll() {
+    state.isScrolling = !state.isScrolling;
+    const btn = document.getElementById('toggle-scroll-btn');
+    btn.textContent = state.isScrolling ? '🔄 自动滚动: 开' : '🔄 自动滚动: 关';
+    btn.classList.toggle('primary', state.isScrolling);
+
+    if (state.isScrolling) {
+        startAutoScroll();
+    } else {
+        stopAutoScroll();
+    }
+}
+
+function startAutoScroll() {
+    stopAutoScroll(); // 清除之前的
+    const columns = [els.kanbanCols.TODO, els.kanbanCols.IN_PROGRESS, els.kanbanCols.DONE];
+    
+    columns.forEach(col => {
+        let scrollSpeed = 0.5; // 像素
+        const scrollFunc = () => {
+            if (!state.isScrolling) return;
+            
+            // 鼠标悬停时不滚动
+            if (col.matches(':hover')) {
+                requestAnimationFrame(scrollFunc);
+                return;
+            }
+
+            col.scrollTop += scrollSpeed;
+            
+            // 循环滚动逻辑
+            if (col.scrollTop + col.clientHeight >= col.scrollHeight - 1) {
+                col.scrollTop = 0; // 回到顶部
+            }
+            requestAnimationFrame(scrollFunc);
+        };
+        requestAnimationFrame(scrollFunc);
+    });
+}
+
+function stopAutoScroll() {
+    state.isScrolling = false;
+    const btn = document.getElementById('toggle-scroll-btn');
+    if (btn) {
+        btn.textContent = '🔄 自动滚动: 关';
+        btn.classList.remove('primary');
     }
 }
 

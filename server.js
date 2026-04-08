@@ -471,6 +471,27 @@ app.put('/api/feedbacks/:id/status', authenticateToken, requirePM, (req, res) =>
     });
 });
 
+// --- SETTINGS API ---
+app.get('/api/settings', (req, res) => {
+    db.all("SELECT * FROM settings", (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const settings = {};
+        rows.forEach(r => settings[r.key] = r.value);
+        res.json(settings);
+    });
+});
+
+app.put('/api/settings', authenticateToken, requirePM, (req, res) => {
+    const { software_name } = req.body;
+    if (software_name === undefined) return res.status(400).json({ error: 'software_name is required' });
+    
+    db.run("INSERT OR REPLACE INTO settings (key, value) VALUES ('software_name', ?)", [software_name], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ updated: this.changes });
+    });
+});
+
+
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running at http://0.0.0.0:${PORT}`);

@@ -62,6 +62,19 @@ const initDb = () => {
             FOREIGN KEY (user_id) REFERENCES users (id)
         )`);
 
+        // Create Settings table
+        db.run(`CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )`);
+
+        // Initialize default settings
+        db.get("SELECT * FROM settings WHERE key = 'software_name'", (err, row) => {
+            if (!row) {
+                db.run("INSERT INTO settings (key, value) VALUES ('software_name', 'TaskManage')");
+            }
+        });
+
         // 自动添加缺失的字段以进行向后兼容
         db.all("PRAGMA table_info(projects);", (err, rows) => {
             if (!err && rows && !rows.some(row => row.name === 'due_date')) {

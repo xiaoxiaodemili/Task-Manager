@@ -42,6 +42,7 @@
                 <li data-target="members" class="nav-item pm-only">👥 成员管理</li>
                 <li data-target="reports" class="nav-item pm-only">📈 数据报表</li>
                 <li data-target="feedbacks" class="nav-item">💬 意见反馈</li>
+                <li data-target="settings-page" class="nav-item pm-only">⚙️ 系统设置</li>
             </ul>
             <div class="user-info">
                 <div class="avatar">👨‍💻</div>
@@ -81,8 +82,13 @@
                             <button class="btn icon-btn" id="next-project-btn" title="下一个项目" style="padding:0 5px;">▶</button>
                         </div>
                     </div>
-                    <button class="btn primary" id="create-task-btn">+ 新建任务</button>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn" id="toggle-scroll-btn">🔄 自动滚动: 关</button>
+                        <button class="btn primary" id="enter-fullscreen-btn">📺 全屏展示</button>
+                        <button class="btn primary" id="create-task-btn">+ 新建任务</button>
+                    </div>
                 </div>
+                <button class="btn danger fullscreen-exit-btn" id="exit-fullscreen-btn">🚪 退出全屏 (ESC)</button>
                 <div class="board" id="kanban-board">
                     <div class="column glass-panel" data-status="TODO">
                         <div class="col-header">
@@ -210,6 +216,28 @@
                         </thead>
                         <tbody></tbody>
                     </table>
+                </div>
+            </section>
+
+            <!-- Settings -->
+            <section id="settings-page" class="page pm-only">
+                <div class="page-header">
+                    <div>
+                        <h1>系统设置</h1>
+                        <p class="subtitle">管理软件全局配置与常用参数</p>
+                    </div>
+                </div>
+                <div class="glass-panel" style="padding: 2.5rem; max-width: 800px;">
+                    <form id="settings-form">
+                        <div class="input-group">
+                            <label>软件名称</label>
+                            <input type="text" id="set-software-name" placeholder="例如：TaskManage" required>
+                            <p style="font-size: 0.9rem; margin-top: 5px;">此名称将显示在侧边栏、登录页及网页标题中。</p>
+                        </div>
+                        <div style="margin-top: 2rem;">
+                            <button type="submit" class="btn primary">💾 保存所有设置</button>
+                        </div>
+                    </form>
                 </div>
             </section>
         </main>

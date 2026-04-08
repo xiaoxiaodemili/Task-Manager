@@ -263,5 +263,65 @@ tr:hover td { background: rgba(59, 130, 246, 0.02); }
 
 html body:not(.is-pm) .pm-only { display: none !important; }
 
+/* Fullscreen Mode Styles */
+body.fullscreen-active {
+    background: #000;
+}
+
+body.fullscreen-active .sidebar {
+    display: none;
+}
+
+body.fullscreen-active .content {
+    padding: 2rem;
+    height: 100vh;
+    overflow: hidden;
+    background: #111;
+    color: #fff;
+}
+
+body.fullscreen-active .page-header {
+    border-color: rgba(255,255,255,0.1);
+}
+
+body.fullscreen-active h1, 
+body.fullscreen-active .subtitle,
+body.fullscreen-active .brand h2,
+body.fullscreen-active .card-header .task-title  {
+    color: #fff;
+}
+
+body.fullscreen-active .column {
+    background: rgba(255,255,255,0.05);
+    height: calc(100vh - 120px);
+}
+
+body.fullscreen-active .task-card {
+    background: #222;
+    border-color: rgba(255,255,255,0.1);
+}
+
+body.fullscreen-active .task-desc, 
+body.fullscreen-active .task-meta {
+    color: #ccc;
+}
+
+body.fullscreen-active .glass-panel {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.1);
+}
+
+.fullscreen-exit-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: none;
+}
+
+body.fullscreen-active .fullscreen-exit-btn {
+    display: flex;
+}
+
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
