@@ -41,6 +41,7 @@
                 <li data-target="kanban" class="nav-item">📋 任务视图</li>
                 <li data-target="members" class="nav-item pm-only">👥 成员管理</li>
                 <li data-target="reports" class="nav-item pm-only">📈 数据报表</li>
+                <li data-target="feedbacks" class="nav-item">💬 意见反馈</li>
             </ul>
             <div class="user-info">
                 <div class="avatar">👨‍💻</div>
@@ -181,6 +182,33 @@
                         <tbody id="report-table-body">
                             <!-- Data injected via JS -->
                         </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Feedbacks -->
+            <section id="feedbacks" class="page">
+                <div class="page-header">
+                    <div>
+                        <h1>意见反馈</h1>
+                        <p class="subtitle">提出您的建议，助力系统优化与团队成长</p>
+                    </div>
+                    <button class="btn primary" id="create-feedback-btn">+ 提交意见</button>
+                </div>
+                <div class="table-container glass-panel" style="overflow-x: auto;">
+                    <table id="feedbacks-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>提交人</th>
+                                <th>意见内容</th>
+                                <th>状态</th>
+                                <th>备注信息</th>
+                                <th>提交时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
                     </table>
                 </div>
             </section>

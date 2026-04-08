@@ -51,6 +51,17 @@ const initDb = () => {
             FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
         )`);
 
+        // Create Feedbacks table
+        db.run(`CREATE TABLE IF NOT EXISTS feedbacks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT NOT NULL,
+            user_id INTEGER,
+            status TEXT DEFAULT 'PENDING',
+            remark TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )`);
+
         // 自动添加缺失的字段以进行向后兼容
         db.all("PRAGMA table_info(projects);", (err, rows) => {
             if (!err && rows && !rows.some(row => row.name === 'due_date')) {

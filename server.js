@@ -421,6 +421,57 @@ app.get('/api/reports/projects', authenticateToken, (req, res) => {
     });
 });
 
+// --- FEEDBACKS API ---
+app.get('/api/feedbacks', authenticateToken, (req, res) => {
+    let sql = `
+        SELECT f.*, u.username as user_name 
+        FROM feedbacks f
+        LEFT JOIN users u ON f.user_id = u.id
+    `;
+    let params = [];
+    if (req.user.role !== 'PM' && req.user.username !== 'admin') {
+        sql += ` WHERE f.user_id = ?`;
+        params.push(req.user.id);
+    }
+    sql += ` ORDER BY f.created_at DESC`;
+
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/api/feedbacks', authenticateToken, (req, res) => {
+    const { content } = req.body;
+    if (!content) return res.status(400).json({ error: 'Content is required' });
+    
+    const sql = "INSERT INTO feedbacks (content, user_id) VALUES (?, ?)";
+    db.run(sql, [content, req.user.id], function (err) {
+        if (err) return res.status(400).json({ error: err.message });
+        res.json({ id: this.lastID, content });
+    });
+});
+
+app.put('/api/feedbacks/:id/status', authenticateToken, requirePM, (req, res) => {
+    const { id } = req.params;
+    const { status, remark } = req.body; // PENDING, PROCESSED, REJECTED
+    
+    let sql, params;
+    if (remark !== undefined) {
+        sql = "UPDATE feedbacks SET status = ?, remark = ? WHERE id = ?";
+        params = [status, remark, id];
+    } else {
+        sql = "UPDATE feedbacks SET status = ? WHERE id = ?";
+        params = [status, id];
+    }
+    
+    db.run(sql, params, function(err) {
+        if (err) return res.status(400).json({ error: err.message });
+        res.json({ updated: this.changes });
+    });
+});
+
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running at http://0.0.0.0:${PORT}`);
 });

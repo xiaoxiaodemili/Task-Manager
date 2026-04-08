@@ -18,7 +18,8 @@ const pages = {
     dashboard: document.getElementById('dashboard'),
     kanban: document.getElementById('kanban'),
     members: document.getElementById('members'),
-    reports: document.getElementById('reports')
+    reports: document.getElementById('reports'),
+    feedbacks: document.getElementById('feedbacks')
 };
 const els = {
     loginForm: document.getElementById('login-form'),
@@ -40,7 +41,9 @@ const els = {
     modalOverlay: document.getElementById('modal-overlay'),
     createProjectBtn: document.getElementById('create-project-btn'),
     createTaskBtn: document.getElementById('create-task-btn'),
-    createUserBtn: document.getElementById('create-user-btn')
+    createUserBtn: document.getElementById('create-user-btn'),
+    createFeedbackBtn: document.getElementById('create-feedback-btn'),
+    feedbacksTableBody: document.querySelector('#feedbacks-table tbody')
 };
 
 // --- Initialization ---
@@ -71,6 +74,7 @@ function setupEventListeners() {
             if (target === 'kanban') loadKanban();
             if (target === 'members') loadUsers();
             if (target === 'reports') initReportView();
+            if (target === 'feedbacks') loadFeedbacks();
         });
     });
 
@@ -78,6 +82,7 @@ function setupEventListeners() {
     els.createProjectBtn.addEventListener('click', () => showModal('project'));
     els.createTaskBtn.addEventListener('click', () => showModal('task'));
     els.createUserBtn.addEventListener('click', () => showModal('user'));
+    if (els.createFeedbackBtn) els.createFeedbackBtn.addEventListener('click', () => showModal('feedback'));
 
     // Kanban Project Selector & Navigation
     els.projectSelector.addEventListener('change', (e) => {
@@ -520,6 +525,18 @@ function showModal(type) {
                 <button class="btn primary" onclick="submitUser()">创建</button>
             </div>
         `;
+    } else if (type === 'feedback') {
+        html = `
+            <h2>提交意见反馈</h2>
+            <div class="input-group">
+                <label>意见内容</label>
+                <textarea id="m-feedback-content" rows="4" placeholder="请详细描述您的建议或遇到的问题..." required></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn" onclick="closeModal()">取消</button>
+                <button class="btn primary" onclick="submitFeedback()">提交意见</button>
+            </div>
+        `;
     }
 
     els.modalOverlay.innerHTML = `<div class="modal-content">${html}</div>`;
@@ -774,6 +791,95 @@ async function deleteUser(id) {
     } catch(err) {
         // Already handled internally by apiCall's fetch throw
     }
+}
+
+// --- Feedbacks ---
+async function loadFeedbacks() {
+    try {
+        const feedbacks = await apiCall('/feedbacks');
+        els.feedbacksTableBody.innerHTML = feedbacks.map(f => {
+            let statusHtml = '';
+            if (f.status === 'PENDING') statusHtml = '<span class="badge" style="background:rgba(234, 179, 8, 0.1); color:#eab308">待处理 (PENDING)</span>';
+            else if (f.status === 'PROCESSED') statusHtml = '<span class="badge" style="background:rgba(34, 197, 94, 0.1); color:#22c55e">已处理 (PROCESSED)</span>';
+            else if (f.status === 'REJECTED') statusHtml = '<span class="badge" style="background:rgba(239, 68, 68, 0.1); color:var(--danger-color)">已驳回 (REJECTED)</span>';
+            
+            const isPM = state.user.role === 'PM' || state.user.username === 'admin';
+            const safeContent = (f.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const safeRemark = (f.remark || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const safeF = JSON.stringify(f).replace(/"/g, '&quot;');
+            
+            return `
+                <tr data-feedback="${safeF}">
+                    <td>#${f.id}</td>
+                    <td style="font-weight:500">${f.user_name || '未知系统用户'}</td>
+                    <td style="max-width:300px; white-space:pre-wrap;">${safeContent}</td>
+                    <td>${statusHtml}</td>
+                    <td style="max-width:200px; white-space:pre-wrap; color:var(--text-secondary);">${safeRemark || '-'}</td>
+                    <td>${new Date(f.created_at).toLocaleString()}</td>
+                    <td>
+                        ${isPM ? `
+                            <button class="btn icon-btn" onclick="processFeedback(this)" style="color:var(--primary-color)" title="处理意见">🛠️ 处理</button>
+                        ` : '-'}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch(err) {
+        console.error("加载意见反馈失败", err);
+    }
+}
+
+async function submitFeedback() {
+    const content = document.getElementById('m-feedback-content').value;
+    if (!content.trim()) return alert('意见内容不能为空');
+    
+    await apiCall('/feedbacks', 'POST', { content });
+    closeModal();
+    if (pages.feedbacks && pages.feedbacks.classList.contains('active')) {
+        loadFeedbacks();
+    } else {
+        alert('意见提交成功！');
+    }
+}
+
+function processFeedback(btn) {
+    const row = btn.closest('tr');
+    const f = JSON.parse(row.dataset.feedback);
+    
+    const html = `
+        <h2>处理意见反馈</h2>
+        <div style="margin-bottom: 15px; padding: 10px; background: rgba(0,0,0,0.03); border-radius: 6px;">
+            <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">用户反馈内容：</p>
+            <p style="margin: 5px 0 0; white-space: pre-wrap;">${(f.content || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+        </div>
+        <div class="input-group">
+            <label>状态修改为</label>
+            <select id="e-feedback-status" class="glass-select">
+                <option value="PENDING" ${f.status==='PENDING'?'selected':''}>待处理 (PENDING)</option>
+                <option value="PROCESSED" ${f.status==='PROCESSED'?'selected':''}>已处理 (PROCESSED)</option>
+                <option value="REJECTED" ${f.status==='REJECTED'?'selected':''}>已驳回 (REJECTED)</option>
+            </select>
+        </div>
+        <div class="input-group">
+            <label>备注信息 / 处理回复</label>
+            <textarea id="e-feedback-remark" rows="3" placeholder="填写处理结果说明或驳回理由...">${f.remark || ''}</textarea>
+        </div>
+        <div class="modal-actions">
+            <button class="btn" onclick="closeModal()">取消</button>
+            <button class="btn primary" onclick="submitProcessFeedback(${f.id})">保存处理结果</button>
+        </div>
+    `;
+    els.modalOverlay.innerHTML = `<div class="modal-content">${html}</div>`;
+    els.modalOverlay.classList.add('active');
+}
+
+async function submitProcessFeedback(id) {
+    const status = document.getElementById('e-feedback-status').value;
+    const remark = document.getElementById('e-feedback-remark').value;
+    
+    await apiCall(`/feedbacks/${id}/status`, 'PUT', { status, remark });
+    closeModal();
+    loadFeedbacks();
 }
 
 // --- Reports ---
