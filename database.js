@@ -26,7 +26,6 @@ const initDb = () => {
             FOREIGN KEY (created_by) REFERENCES users (id)
         )`);
 
-        // Create Tasks table
         db.run(`CREATE TABLE IF NOT EXISTS tasks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id INTEGER NOT NULL,
@@ -36,6 +35,7 @@ const initDb = () => {
             status TEXT DEFAULT 'TODO',
             due_date DATE,
             priority TEXT DEFAULT 'NORMAL',
+            completion_result TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             completed_at DATETIME,
             FOREIGN KEY (project_id) REFERENCES projects (id),

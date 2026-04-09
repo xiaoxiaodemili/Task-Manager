@@ -360,16 +360,30 @@ app.put('/api/tasks/:id/status', authenticateToken, (req, res) => {
 
 app.put('/api/tasks/:id', authenticateToken, requirePM, (req, res) => {
     const { id } = req.params;
-    const { project_id, title, description, assignee_id, due_date, priority } = req.body;
-    let sql, params;
+    const body = req.body;
     
-    if (req.user.username === 'admin' && project_id) {
-        sql = "UPDATE tasks SET project_id=?, title=?, description=?, assignee_id=?, due_date=?, priority=?, completion_result=? WHERE id=?";
-        params = [project_id, title, description, assignee_id, due_date, priority || 'NORMAL', req.body.completion_result || null, id];
-    } else {
-        sql = "UPDATE tasks SET title=?, description=?, assignee_id=?, due_date=?, priority=?, completion_result=? WHERE id=?";
-        params = [title, description, assignee_id, due_date, priority || 'NORMAL', req.body.completion_result || null, id];
+    // 允许更新的字段白名单
+    const allowedFields = ['title', 'description', 'assignee_id', 'due_date', 'priority', 'completion_result'];
+    if (req.user.username === 'admin') {
+        allowedFields.push('project_id');
     }
+    
+    let updates = [];
+    let params = [];
+    
+    allowedFields.forEach(field => {
+        if (body[field] !== undefined) {
+            updates.push(`${field} = ?`);
+            params.push(body[field]);
+        }
+    });
+    
+    if (updates.length === 0) {
+        return res.json({ message: 'No fields to update' });
+    }
+    
+    const sql = `UPDATE tasks SET ${updates.join(', ')} WHERE id = ?`;
+    params.push(id);
     
     db.run(sql, params, function (err) {
         if (err) return res.status(400).json({ error: err.message });

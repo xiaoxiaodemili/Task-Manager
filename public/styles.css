@@ -223,6 +223,51 @@ th { background: rgba(243, 244, 246, 0.8); font-weight: 600; color: var(--text-s
 td { font-size: 1.05rem; }
 tr:hover td { background: rgba(59, 130, 246, 0.02); }
 
+/* Task Completion Area */
+.task-completion-area {
+    margin-top: 1rem;
+    padding-top: 0.8rem;
+    border-top: 1px dashed rgba(0,0,0,0.1);
+}
+
+.task-completion-input {
+    width: 100%;
+    min-height: 60px;
+    padding: 0.8rem;
+    border-radius: 8px;
+    border: 1px solid rgba(0,0,0,0.1);
+    background: rgba(243, 244, 246, 0.5);
+    font-size: 0.95rem;
+    font-family: inherit;
+    resize: none;
+    transition: all 0.2s;
+}
+
+.task-completion-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.task-completion-display {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    padding: 0.5rem 0.8rem;
+    background: rgba(16, 185, 129, 0.05);
+    border-radius: 6px;
+    border-left: 3px solid var(--success-color);
+}
+
+.task-card.clickable {
+    cursor: pointer;
+}
+
+.task-card .task-completion-input, 
+.task-card .task-completion-area button {
+    cursor: text;
+}
+
 /* Modals */
 .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.3);
@@ -235,6 +280,48 @@ tr:hover td { background: rgba(59, 130, 246, 0.02); }
     border: 1px solid rgba(0,0,0,0.1); box-shadow: 0 25px 50px rgba(0,0,0,0.15);
     animation: slideUp 0.3s ease forwards;
 }
+
+.modal-content.wide {
+    width: 800px;
+}
+
+.details-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.detail-label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.detail-value {
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.detail-value.full-width {
+    grid-column: span 2;
+}
+
+.detail-section {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--panel-border);
+}
+
 .modal-actions { display: flex; justify-content: flex-end; gap: 1.2rem; margin-top: 2rem; }
 .icon-btn { padding: 0.4rem; font-size: 1.2rem; line-height: 1; background: transparent; border: none; cursor: pointer; border-radius: 6px; }
 .icon-btn:hover { background: rgba(0,0,0,0.05); }
@@ -285,9 +372,15 @@ html body:not(.is-pm) .pm-only { display: none !important; }
     margin-top: 1rem;
 }
 
-/* Fullscreen Mode Styles - 优化暗色模式以提高清晰度与质感 */
+/* Fullscreen Mode Styles - 至尊极简暗黑玻璃 (Premium Dark Glass) */
 body.fullscreen-active {
-    background: radial-gradient(circle at top right, #1e293b, #0f172a);
+    background: #000;
+    background-image: 
+        radial-gradient(at 0% 0%, #1e293b 0px, transparent 50%),
+        radial-gradient(at 100% 0%, #0f172a 0px, transparent 50%),
+        radial-gradient(at 50% 100%, #111827 0px, transparent 50%);
+    font-size: 18px;
+    letter-spacing: -0.01em;
 }
 
 body.fullscreen-active .sidebar {
@@ -295,58 +388,125 @@ body.fullscreen-active .sidebar {
 }
 
 body.fullscreen-active .content {
-    padding: 2.5rem;
+    padding: 4rem;
     height: 100vh;
     overflow: hidden;
     background: transparent;
-    color: #f8fafc;
+    color: rgba(255, 255, 255, 0.95);
 }
 
 body.fullscreen-active .page-header {
-    border-color: rgba(255,255,255,0.15);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    margin-bottom: 4rem;
+    padding-bottom: 2rem;
 }
 
-body.fullscreen-active h1, 
-body.fullscreen-active .brand h2,
-body.fullscreen-active .card-header .task-title  {
-    color: #ffffff;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+body.fullscreen-active h1 {
+    font-size: 3.2rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.03em;
+    text-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
 body.fullscreen-active .subtitle {
-    color: #94a3b8;
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 0.5rem;
 }
 
 body.fullscreen-active .column {
-    background: rgba(15, 23, 42, 0.6);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    height: calc(100vh - 140px);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    background: rgba(255, 255, 255, 0.02);
+    backdrop-filter: blur(40px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    height: calc(100vh - 220px);
+    padding: 2rem;
+    border-radius: 24px;
+    box-shadow: 0 40px 100px rgba(0,0,0,0.4);
+}
+
+body.fullscreen-active .col-header {
+    margin-bottom: 2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+body.fullscreen-active .col-header h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+body.fullscreen-active .status-indicator {
+    width: 10px;
+    height: 10px;
+    box-shadow: 0 0 20px currentColor;
 }
 
 body.fullscreen-active .task-card {
-    background: rgba(30, 41, 59, 0.8);
-    border-color: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 2rem;
+    margin-bottom: 1.5rem;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    transition: all 0.5s cubic-bezier(0.2, 1, 0.2, 1);
 }
 
 body.fullscreen-active .task-card:hover {
-    border-color: var(--primary-color);
-    background: rgba(51, 65, 85, 0.9);
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-8px) scale(1.01);
+    box-shadow: 0 30px 70px rgba(0,0,0,0.4);
+}
+
+body.fullscreen-active .card-header .task-title {
+    color: #fff;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.8rem;
 }
 
 body.fullscreen-active .task-desc {
-    color: #e2e8f0;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 1.1rem;
+    line-height: 1.8;
+    margin-bottom: 1.5rem;
 }
 
 body.fullscreen-active .task-meta {
-    color: #cbd5e1;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.95rem;
+    font-weight: 500;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 1rem;
 }
 
-body.fullscreen-active .glass-panel {
-    background: rgba(30, 41, 59, 0.5);
-    border-color: rgba(255, 255, 255, 0.1);
+body.fullscreen-active .priority-tag {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+body.fullscreen-active .task-completion-display {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-left: 2px solid #3b82f6;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 1rem;
+    font-style: italic;
+    padding: 1rem 1.2rem;
+}
+
+body.fullscreen-active .bg-warn, body.fullscreen-active .bg-danger {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
 }
 
 .fullscreen-exit-btn {

@@ -22,7 +22,8 @@ const pages = {
     members: document.getElementById('members'),
     reports: document.getElementById('reports'),
     feedbacks: document.getElementById('feedbacks'),
-    settingsPage: document.getElementById('settings-page')
+    settingsPage: document.getElementById('settings-page'),
+    'settings-page': document.getElementById('settings-page')
 };
 const els = {
     loginForm: document.getElementById('login-form'),
@@ -208,13 +209,16 @@ async function loadSettings() {
 }
 
 async function loadSettingsToForm() {
-    const settings = await apiCall('/settings');
-    if (settings.software_name) {
-        els.setSoftwareName.value = settings.software_name;
+    try {
+        const settings = await apiCall('/settings');
+        if (settings && settings.software_name) {
+            els.setSoftwareName.value = settings.software_name;
+        } else {
+            els.setSoftwareName.value = 'TaskManage'; // 降级默认值
+        }
+    } catch (err) {
+        console.error('加载设置失败:', err);
     }
-    // 强制显示包含软件名称的容器
-    const nameGroup = els.setSoftwareName.closest('.input-group');
-    if (nameGroup) nameGroup.style.display = 'block';
 }
 
 async function handleSettingsSubmit(e) {
@@ -430,9 +434,8 @@ async function loadTasks(projectId) {
         let warningClass = '';
         let dueBadgeHtml = '';
         if (t.due_date && status !== 'DONE') {
-            const todayStr = new Date().toLocaleDateString('en-CA'); // Get local date in YYYY-MM-DD
+            const todayStr = new Date().toLocaleDateString('en-CA'); 
             const dueObj = new Date(t.due_date);
-            // Ensure no timezone shift issue by setting hours to 0
             dueObj.setHours(0,0,0,0);
             const todayObj = new Date(todayStr);
             todayObj.setHours(0,0,0,0);
@@ -449,7 +452,7 @@ async function loadTasks(projectId) {
         }
 
         const card = document.createElement('div');
-        card.className = `task-card ${warningClass}`;
+        card.className = `task-card clickable ${warningClass}`;
         
         const canDrag = state.user.role === 'PM' || state.user.id === t.assignee_id;
         card.draggable = canDrag;
@@ -461,6 +464,35 @@ async function loadTasks(projectId) {
         card.dataset.task = JSON.stringify(t);
         card.addEventListener('dragstart', handleDragStart);
         
+        // 点击展示详情 (避开按钮和输入框)
+        card.onclick = (e) => {
+            if (e.target.closest('.card-actions') || e.target.closest('.task-completion-area')) return;
+            viewTaskDetails(t);
+        };
+
+        let completionAreaHtml = '';
+        if (status === 'IN_PROGRESS') {
+            const canEdit = state.user.role === 'PM' || state.user.id === t.assignee_id;
+            completionAreaHtml = `
+                <div class="task-completion-area">
+                    <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 5px;">✍️ 完成情况:</div>
+                    <textarea 
+                        class="task-completion-input" 
+                        placeholder="在此填写工作进展..." 
+                        ${!canEdit ? 'disabled' : ''}
+                        onblur="saveTaskCompletion(${t.id}, this.value)"
+                    >${t.completion_result || ''}</textarea>
+                </div>
+            `;
+        } else if (status === 'DONE' && t.completion_result) {
+            completionAreaHtml = `
+                <div class="task-completion-area">
+                    <div style="font-size: 0.85rem; font-weight: 600; color: var(--success-color); margin-bottom: 5px;">✅ 完成汇报:</div>
+                    <div class="task-completion-display">${t.completion_result}</div>
+                </div>
+            `;
+        }
+        
         card.innerHTML = `
             <div class="card-header">
                 <div>
@@ -471,8 +503,8 @@ async function loadTasks(projectId) {
                     ${t.due_date ? `<div style="font-size:0.9rem; color: var(--text-secondary); font-weight: 500; margin-bottom: 8px;">🕒 截止时限: ${t.due_date} ${dueBadgeHtml}</div>` : ''}
                 </div>
                 <div class="card-actions" style="display:flex;">
-                    ${state.user.role === 'PM' ? `<button class="btn icon-btn pm-only" onclick="editTask(this)" style="color:var(--primary-color); font-size: 0.9em; padding:0 5px;" title="编辑任务">✎</button>` : ''}
-                    ${state.user.role === 'PM' ? `<button class="btn icon-btn pm-only" onclick="deleteTask(${t.id})" style="color:var(--danger-color); font-size: 0.9em; padding:0;" title="删除">✕</button>` : ''}
+                    ${state.user.role === 'PM' ? `<button class="btn icon-btn pm-only" onclick="event.stopPropagation(); editTask(this)" style="color:var(--primary-color); font-size: 0.9em; padding:0 5px;" title="编辑任务">✎</button>` : ''}
+                    ${state.user.role === 'PM' ? `<button class="btn icon-btn pm-only" onclick="event.stopPropagation(); deleteTask(${t.id})" style="color:var(--danger-color); font-size: 0.9em; padding:0;" title="删除">✕</button>` : ''}
                 </div>
             </div>
             <p class="task-desc">${t.description || ''}</p>
@@ -480,6 +512,7 @@ async function loadTasks(projectId) {
                 <span>👤 ${t.assignee_name || '未分配'}</span>
                 <span class="priority-tag p-${t.priority}">${t.priority}</span>
             </div>
+            ${completionAreaHtml}
         `;
         
         if (els.kanbanCols[status]) els.kanbanCols[status].appendChild(card);
@@ -488,6 +521,15 @@ async function loadTasks(projectId) {
     document.querySelector('.todo-count').textContent = counts.TODO;
     document.querySelector('.inprog-count').textContent = counts.IN_PROGRESS;
     document.querySelector('.done-count').textContent = counts.DONE;
+}
+
+// 自动保存完成情况
+async function saveTaskCompletion(taskId, value) {
+    try {
+        await apiCall(`/tasks/${taskId}`, 'PUT', { completion_result: value });
+    } catch (err) {
+        console.error('保存失败:', err);
+    }
 }
 
 async function deleteTask(id) {
@@ -512,16 +554,20 @@ async function handleDrop(e) {
     const newStatus = colList.parentElement.dataset.status;
     if (!draggedTaskId || !newStatus) return;
 
+    // 获取被拖拽的元素及其完成情况
+    const draggedCard = document.querySelector(`.task-card[data-id="${draggedTaskId}"]`);
+    const completionInput = draggedCard ? draggedCard.querySelector('.task-completion-input') : null;
+    const completionValue = completionInput ? completionInput.value.trim() : "";
+
     try {
         let payload = { status: newStatus };
         
         if (newStatus === 'DONE') {
-            const result = prompt('请填写任务【完成情况】(必填):');
-            if (!result || result.trim() === '') {
-                alert('必须填写完成情况才能将任务标记为已完成');
+            if (!completionValue) {
+                alert('请先在任务卡片内填写【完成情况汇报】，才能将其标记为已完成。');
                 return;
             }
-            payload.completion_result = result;
+            payload.completion_result = completionValue;
         }
 
         await apiCall(`/tasks/${draggedTaskId}/status`, 'PUT', payload);
@@ -530,6 +576,67 @@ async function handleDrop(e) {
         console.error(err);
     }
     draggedTaskId = null;
+}
+
+// 查看任务详情
+function viewTaskDetails(task) {
+    const html = `
+        <div class="modal-content wide">
+            <div style="display:flex; justify-content:space-between; align-items: flex-start; margin-bottom: 2rem;">
+                <h1 style="margin:0;">任务详情</h1>
+                <span class="priority-tag p-${task.priority}" style="font-size: 1rem; padding: 5px 15px;">${task.priority}</span>
+            </div>
+            
+            <div class="details-grid">
+                <div class="detail-item">
+                    <span class="detail-label">任务名称</span>
+                    <span class="detail-value">${task.title}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">所属项目</span>
+                    <span class="detail-value">${task.project_name || '未知项目'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">责任人</span>
+                    <span class="detail-value">👤 ${task.assignee_name || '未分配'}</span>
+                </div>
+                <div class="detail-item">
+                    <span class="detail-label">截止时限</span>
+                    <span class="detail-value">🕒 ${task.due_date || '未设置'}</span>
+                </div>
+                <div class="detail-item full-width detail-section">
+                    <span class="detail-label">计划内容 / 任务描述</span>
+                    <div class="detail-value" style="background: rgba(0,0,0,0.03); padding: 1.2rem; border-radius: 8px; line-height: 1.6; white-space: pre-wrap;">${task.description || '无详细描述'}</div>
+                </div>
+                
+                ${task.completion_result ? `
+                <div class="detail-item full-width detail-section">
+                    <span class="detail-label" style="color:var(--success-color)">✨ 完成情况汇报</span>
+                    <div class="detail-value" style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.1); padding: 1.2rem; border-radius: 8px; line-height: 1.6; color: var(--text-primary); white-space: pre-wrap;">${task.completion_result}</div>
+                </div>
+                ` : ''}
+
+                <div class="detail-item">
+                    <span class="detail-label">完成状态</span>
+                    <span class="badge" style="font-size: 1rem; background: ${task.status === 'DONE' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(59, 130, 246, 0.1)'}; color: ${task.status === 'DONE' ? 'var(--success-color)' : 'var(--primary-color)'}">
+                        ${task.status === 'DONE' ? '已完成' : (task.status === 'IN_PROGRESS' ? '进行中' : '待完成')}
+                    </span>
+                </div>
+                ${task.completed_at ? `
+                <div class="detail-item">
+                    <span class="detail-label">标记完成时间</span>
+                    <span class="detail-value" style="font-size:1rem;">📅 ${task.completed_at}</span>
+                </div>
+                ` : ''}
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn primary" onclick="closeModal()">关闭</button>
+            </div>
+        </div>
+    `;
+    els.modalOverlay.innerHTML = html;
+    els.modalOverlay.classList.add('active');
 }
 
 // --- Members ---
