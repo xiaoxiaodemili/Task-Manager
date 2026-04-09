@@ -329,6 +329,8 @@ app.put('/api/tasks/:id/status', authenticateToken, (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!row) return res.status(404).json({ error: 'Task not found' });
         
+        const { completion_result } = req.body;
+        
         if (row.status === 'DONE' && status !== 'DONE' && req.user.role !== 'PM' && req.user.username !== 'admin') {
             return res.status(403).json({ error: '权限不足：只有项目经理及以上权限可将任务从“已完成”移出' });
         }
@@ -339,10 +341,10 @@ app.put('/api/tasks/:id/status', authenticateToken, (req, res) => {
         
         let sql, params;
         if (status === 'DONE' && row.status !== 'DONE') {
-            sql = "UPDATE tasks SET status = ?, completed_at = DATETIME('now', 'localtime') WHERE id = ?";
-            params = [status, id];
+            sql = "UPDATE tasks SET status = ?, completion_result = ?, completed_at = DATETIME('now', 'localtime') WHERE id = ?";
+            params = [status, completion_result || null, id];
         } else if (row.status === 'DONE' && status !== 'DONE') {
-            sql = "UPDATE tasks SET status = ?, completed_at = NULL WHERE id = ?";
+            sql = "UPDATE tasks SET status = ?, completion_result = NULL, completed_at = NULL WHERE id = ?";
             params = [status, id];
         } else {
             sql = "UPDATE tasks SET status = ? WHERE id = ?";
@@ -362,11 +364,11 @@ app.put('/api/tasks/:id', authenticateToken, requirePM, (req, res) => {
     let sql, params;
     
     if (req.user.username === 'admin' && project_id) {
-        sql = "UPDATE tasks SET project_id=?, title=?, description=?, assignee_id=?, due_date=?, priority=? WHERE id=?";
-        params = [project_id, title, description, assignee_id, due_date, priority || 'NORMAL', id];
+        sql = "UPDATE tasks SET project_id=?, title=?, description=?, assignee_id=?, due_date=?, priority=?, completion_result=? WHERE id=?";
+        params = [project_id, title, description, assignee_id, due_date, priority || 'NORMAL', req.body.completion_result || null, id];
     } else {
-        sql = "UPDATE tasks SET title=?, description=?, assignee_id=?, due_date=?, priority=? WHERE id=?";
-        params = [title, description, assignee_id, due_date, priority || 'NORMAL', id];
+        sql = "UPDATE tasks SET title=?, description=?, assignee_id=?, due_date=?, priority=?, completion_result=? WHERE id=?";
+        params = [title, description, assignee_id, due_date, priority || 'NORMAL', req.body.completion_result || null, id];
     }
     
     db.run(sql, params, function (err) {
@@ -402,6 +404,7 @@ app.get('/api/reports/projects', authenticateToken, (req, res) => {
             t.status as task_status,
             t.due_date as task_due_date,
             t.completed_at as task_completed_at,
+            t.completion_result as task_completion_result,
             u_assignee.username as task_assignee_name
         FROM projects p
         LEFT JOIN users u_owner ON p.created_by = u_owner.id

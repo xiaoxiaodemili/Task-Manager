@@ -69,9 +69,18 @@ function setupEventListeners() {
     // Navigation
     els.navItems.forEach(item => {
         item.addEventListener('click', (e) => {
+            const target = e.currentTarget.dataset.target;
+
+            // 权限拦截逻辑
+            if (target === 'settings-page') {
+                if (state.user.role !== 'PM' && state.user.username !== 'admin') {
+                    alert('权限不足：只有管理员或项目经理可以访问系统设置');
+                    return;
+                }
+            }
+
             els.navItems.forEach(nav => nav.classList.remove('active'));
             e.currentTarget.classList.add('active');
-            const target = e.currentTarget.dataset.target;
             Object.values(pages).forEach(page => page.classList.remove('active'));
             pages[target].classList.add('active');
             
@@ -123,11 +132,9 @@ function setupEventListeners() {
 
     // Fullscreen and Scroll
     const enterFsBtn = document.getElementById('enter-fullscreen-btn');
-    const exitFsBtn = document.getElementById('exit-fullscreen-btn');
     const toggleScrollBtn = document.getElementById('toggle-scroll-btn');
 
     if (enterFsBtn) enterFsBtn.addEventListener('click', toggleFullscreen);
-    if (exitFsBtn) exitFsBtn.addEventListener('click', toggleFullscreen);
     if (toggleScrollBtn) toggleScrollBtn.addEventListener('click', toggleAutoScroll);
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -166,7 +173,7 @@ async function apiCall(endpoint, method = 'GET', body = null) {
 }
 
 function updateAccessControl() {
-    if (state.user.role === 'PM') {
+    if (state.user.role === 'PM' || state.user.username === 'admin') {
         document.body.classList.add('is-pm');
     } else {
         document.body.classList.remove('is-pm');
@@ -205,6 +212,9 @@ async function loadSettingsToForm() {
     if (settings.software_name) {
         els.setSoftwareName.value = settings.software_name;
     }
+    // 强制显示包含软件名称的容器
+    const nameGroup = els.setSoftwareName.closest('.input-group');
+    if (nameGroup) nameGroup.style.display = 'block';
 }
 
 async function handleSettingsSubmit(e) {
@@ -329,6 +339,12 @@ function handleFullscreenChange() {
     const isFs = !!document.fullscreenElement;
     document.body.classList.toggle('fullscreen-active', isFs);
     
+    // 更新按钮文字
+    const fsBtn = document.getElementById('enter-fullscreen-btn');
+    if (fsBtn) {
+        fsBtn.textContent = isFs ? '🚪 退出全屏' : '📺 全屏展示';
+    }
+
     // 全屏时隐藏/显示部分元素
     const kanbanHeaderTitle = document.querySelector('#kanban .page-header h1');
     if (isFs) {
@@ -354,25 +370,36 @@ function toggleAutoScroll() {
 }
 
 function startAutoScroll() {
-    stopAutoScroll(); // 清除之前的
+    stopAutoScroll(); 
+    state.isScrolling = true;
     const columns = [els.kanbanCols.TODO, els.kanbanCols.IN_PROGRESS, els.kanbanCols.DONE];
     
     columns.forEach(col => {
-        let scrollSpeed = 0.5; // 像素
+        let scrollAccumulator = 0;
+        const scrollStep = 0.6; 
+
         const scrollFunc = () => {
             if (!state.isScrolling) return;
             
-            // 鼠标悬停时不滚动
+            if (col.scrollHeight <= col.clientHeight) {
+                requestAnimationFrame(scrollFunc);
+                return;
+            }
+
             if (col.matches(':hover')) {
                 requestAnimationFrame(scrollFunc);
                 return;
             }
 
-            col.scrollTop += scrollSpeed;
+            scrollAccumulator += scrollStep;
+            if (scrollAccumulator >= 1) {
+                const step = Math.floor(scrollAccumulator);
+                col.scrollTop += step;
+                scrollAccumulator -= step;
+            }
             
-            // 循环滚动逻辑
-            if (col.scrollTop + col.clientHeight >= col.scrollHeight - 1) {
-                col.scrollTop = 0; // 回到顶部
+            if (col.scrollTop + col.clientHeight >= col.scrollHeight - 2) {
+                col.scrollTop = 0;
             }
             requestAnimationFrame(scrollFunc);
         };
@@ -486,8 +513,19 @@ async function handleDrop(e) {
     if (!draggedTaskId || !newStatus) return;
 
     try {
-        await apiCall(`/tasks/${draggedTaskId}/status`, 'PUT', { status: newStatus });
-        loadTasks(state.currentProject); // reload to reflect changes and counts
+        let payload = { status: newStatus };
+        
+        if (newStatus === 'DONE') {
+            const result = prompt('请填写任务【完成情况】(必填):');
+            if (!result || result.trim() === '') {
+                alert('必须填写完成情况才能将任务标记为已完成');
+                return;
+            }
+            payload.completion_result = result;
+        }
+
+        await apiCall(`/tasks/${draggedTaskId}/status`, 'PUT', payload);
+        loadTasks(state.currentProject); 
     } catch (err) {
         console.error(err);
     }
@@ -555,7 +593,7 @@ function renderProjectModal(project = null) {
             <input type="text" id="m-proj-name" value="${name}" required>
         </div>
         <div class="input-group">
-            <label>描述</label>
+            <label>项目计划内容</label>
             <textarea id="m-proj-desc" rows="3">${desc}</textarea>
         </div>
         <div class="input-group">
@@ -678,7 +716,7 @@ function renderTaskModal() {
             <input type="text" id="m-task-title" required>
         </div>
         <div class="input-group">
-            <label>描述</label>
+            <label>计划内容</label>
             <textarea id="m-task-desc" rows="2"></textarea>
         </div>
         <div class="input-group" style="display:flex; gap:10px;">

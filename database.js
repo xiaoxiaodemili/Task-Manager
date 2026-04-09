@@ -82,8 +82,13 @@ const initDb = () => {
             }
         });
         db.all("PRAGMA table_info(tasks);", (err, rows) => {
-            if (!err && rows && !rows.some(row => row.name === 'completed_at')) {
-                db.run("ALTER TABLE tasks ADD COLUMN completed_at DATETIME");
+            if (!err && rows) {
+                if (!rows.some(row => row.name === 'completed_at')) {
+                    db.run("ALTER TABLE tasks ADD COLUMN completed_at DATETIME");
+                }
+                if (!rows.some(row => row.name === 'completion_result')) {
+                    db.run("ALTER TABLE tasks ADD COLUMN completion_result TEXT");
+                }
             }
         });
 

@@ -69,6 +69,16 @@ p { color: var(--text-secondary); line-height: 1.6; font-size: 1.1rem; }
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
+#toggle-scroll-btn.primary {
+    animation: pulse-border 2s infinite;
+}
+
+@keyframes pulse-border {
+    0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+
 .btn.primary:hover {
     background: var(--primary-hover);
     transform: translateY(-2px);
@@ -261,11 +271,23 @@ tr:hover td { background: rgba(59, 130, 246, 0.02); }
     flex: 1;
 }
 
+/* 权限与可见性控制 */
 html body:not(.is-pm) .pm-only { display: none !important; }
 
-/* Fullscreen Mode Styles */
+/* 系统设置页面专用显示逻辑，确保其激活时不受 pm-only 干扰 */
+#settings-page.active {
+    display: flex !important;
+    flex-direction: column;
+}
+
+#settings-page .glass-panel {
+    width: 100%;
+    margin-top: 1rem;
+}
+
+/* Fullscreen Mode Styles - 优化暗色模式以提高清晰度与质感 */
 body.fullscreen-active {
-    background: #000;
+    background: radial-gradient(circle at top right, #1e293b, #0f172a);
 }
 
 body.fullscreen-active .sidebar {
@@ -273,42 +295,58 @@ body.fullscreen-active .sidebar {
 }
 
 body.fullscreen-active .content {
-    padding: 2rem;
+    padding: 2.5rem;
     height: 100vh;
     overflow: hidden;
-    background: #111;
-    color: #fff;
+    background: transparent;
+    color: #f8fafc;
 }
 
 body.fullscreen-active .page-header {
-    border-color: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.15);
 }
 
 body.fullscreen-active h1, 
-body.fullscreen-active .subtitle,
 body.fullscreen-active .brand h2,
 body.fullscreen-active .card-header .task-title  {
-    color: #fff;
+    color: #ffffff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+body.fullscreen-active .subtitle {
+    color: #94a3b8;
 }
 
 body.fullscreen-active .column {
-    background: rgba(255,255,255,0.05);
-    height: calc(100vh - 120px);
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    height: calc(100vh - 140px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 }
 
 body.fullscreen-active .task-card {
-    background: #222;
-    border-color: rgba(255,255,255,0.1);
+    background: rgba(30, 41, 59, 0.8);
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 
-body.fullscreen-active .task-desc, 
+body.fullscreen-active .task-card:hover {
+    border-color: var(--primary-color);
+    background: rgba(51, 65, 85, 0.9);
+}
+
+body.fullscreen-active .task-desc {
+    color: #e2e8f0;
+}
+
 body.fullscreen-active .task-meta {
-    color: #ccc;
+    color: #cbd5e1;
 }
 
 body.fullscreen-active .glass-panel {
-    background: rgba(255,255,255,0.05);
-    border-color: rgba(255,255,255,0.1);
+    background: rgba(30, 41, 59, 0.5);
+    border-color: rgba(255, 255, 255, 0.1);
 }
 
 .fullscreen-exit-btn {
